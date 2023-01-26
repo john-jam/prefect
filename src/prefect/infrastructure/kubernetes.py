@@ -589,21 +589,27 @@ class KubernetesJob(Infrastructure):
 
         # Wait for job to complete
         # if `job_watch_timeout_seconds` is None, no timeout will be enforced
-        self.logger.debug(f"Job {job_name!r}: Starting watch for job completion")
+        self.logger.info(f"Initial watch for job {job_name!r}")
         watch = kubernetes.watch.Watch()
-        with self.get_batch_client() as batch_client:
-            for event in watch.stream(
-                func=batch_client.list_namespaced_job,
-                field_selector=f"metadata.name={job_name}",
-                namespace=self.namespace,
-                timeout_seconds=self.job_watch_timeout_seconds,
-            ):
-                if event["object"].status.completion_time:
-                    watch.stop()
-                    break
-            else:
-                self.logger.error(f"Job {job_name!r}: Job did not complete.")
-                return -1
+        completed = False
+        while not completed:
+            self.logger.info(f"Starting streaming events for job {job_name!r}")
+            with self.get_batch_client() as batch_client:
+                for event in watch.stream(
+                    func=batch_client.list_namespaced_job,
+                    field_selector=f"metadata.name={job_name}",
+                    namespace=self.namespace,
+                    timeout_seconds=self.job_watch_timeout_seconds,
+                ):
+                    self.logger.info(f"New event for job {job_name!r}: {event['object'].status}")
+                    if event["object"].status.completion_time:
+                        self.logger.info(f"Completed job {job_name!r}")
+                        watch.stop()
+                        completed = True
+                        break
+                    else:
+                        self.logger.info(f"Pending job {job_name!r}")
+                self.logger.info(f"Streaming events exited for job {job_name!r}")
 
         with self.get_client() as client:
             pod_status = client.read_namespaced_pod_status(

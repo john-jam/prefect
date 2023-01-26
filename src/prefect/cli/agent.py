@@ -150,6 +150,7 @@ async def start(
     ) as agent:
         if not hide_welcome:
             app.console.print(ascii_name)
+            app.console.print("JLTEST DEBUG: ON")
             if work_queue_prefix:
                 app.console.print(
                     "Agent started! Looking for work from "
